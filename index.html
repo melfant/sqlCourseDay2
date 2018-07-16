@@ -1,0 +1,312 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <title>Основы SQL - презентация</title>
+    <link rel="stylesheet" href="css/reveal.css">
+    <link rel="stylesheet" href="css/theme/black.css">
+
+    <!-- Theme used for syntax highlighting of code -->
+    <link rel="stylesheet" href="lib/css/zenburn.css">
+
+    <!-- custom user theme -->
+    <link rel="stylesheet" href="lib/css/bootstrap.css">
+    <link rel="stylesheet" href="css/theme/tables.css">
+    <!-- Printing and PDF exports -->
+    <script>
+        var link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.type = 'text/css';
+        link.href = window.location.search.match(/print-pdf/gi) ? 'css/print/pdf.css' : 'css/print/paper.css';
+        document.getElementsByTagName('head')[0].appendChild(link);
+    </script>
+</head>
+
+<body>
+    <div class="reveal">
+        <div class="slides">
+
+            <section>
+                <h2>Презентация тут</h2>
+                <!--img src="http://qrcoder.ru/code/?https%3A%2F%2Fmelfant.github.io%2FsqlCourse%2F&10&0" width="410" height="410"
+                    border="0" title="QR код"-->
+                <p>https://melfant.github.io/sqlCourseDay2/</p>
+            </section>
+            <section>
+                <h1>Создание таблиц</h1>
+            </section>
+            <section>
+                <section>
+                    <h2>Типы данных</h2>
+                    <h4>&darr;</h4>
+                </section>
+                <section>
+                    <h4>Целочисленные:</h4>
+                    <ul>
+                        <li class="fragment">bit (0, 1)</li>
+                        <li class="fragment">int (от -2^31 до 2^31-1)</li>
+                        <li class="fragment">smallint (от -2^15 до 2^15-1)</li>
+                        <li class="fragment">tinyint (от 0 до 255)</li>
+                    </ul>
+                </section>
+                <section>
+                    <h4>Вещественные:</h4>
+                    <ul>
+                        <li class="fragment">float (нам хватит).<br/>С плавающей запятой</li>
+                        <li class="fragment">decimal(x, y) (от -10^38 до 10^38-1).<br/>С фиксированным кол-ом знаков после запятой</li>
+                    </ul>
+                </section>
+                <section>
+                    <h4>Символьные:</h4>
+                    <ul>
+                        <li class="fragment">char(n)</li>
+                        <li class="fragment">varchar(n)</li>
+                    </ul>
+                </section>
+                <section>
+                    <h4>Дата и время:</h4>
+                    <ul>
+                        <li class="fragment">date</li>
+                        <li class="fragment">datetime</li>
+                    </ul>
+                </section>
+            </section>
+            <section>
+                <section>
+                    <h2>Создадим что-нибудь простое</h2>
+                    <h4>&darr;</h4>
+                </section>
+                <section>
+                    <h4>Например, таблицу</h4>
+                    <pre class="fragment"><code class="sql">create table [dwh].[Deal](
+	[BookValueDate] [date] not null,
+	[SourceSystemId] [smallint] not null,
+	[SourceSystemRecordNumber] [varchar](100) not null,
+	[ProductId] [smallint] null,
+	[BusinessBlockId] [smallint] null,
+	[CurrencyCode] [char](3) null,
+	[CurrentNominal] [decimal](23, 5) null,
+	[CurrentNominalInterestRate] [decimal](7, 6) null,
+	[DealDate] [date] null,
+	[ValueDate] [date] null,
+	[MaturityDate] [date] null,
+	[InterestFrequencyId] [smallint] null,
+	[HasWithdrawOptionFlag] [bit] null,
+	[HasTopUpOptionFlag] [bit] null,
+	[CounterpartyId] [int] null
+)</code></pre>
+                </section>
+                <section>
+                    <h4>Добавим первичный ключ</h4>
+                    <pre class="fragment"><code class="sql">alter table [dwh].[Deal] add primary key clustered
+(
+	[BookValueDate],
+	[SourceSystemId],
+	[SourceSystemRecordNumber]
+)</code></pre>
+                </section>
+                <section>
+                    <h4>Добавим внешние ключи</h4>
+                    <pre class="fragment"><code class="sql">alter table [dwh].[Deal] add foreign key([BusinessBlockId])
+references [dwh].[DimBusinessBlock] ([BusinessBlockId])
+
+alter table [dwh].[Deal] add foreign key([CounterpartyId])
+references [dwh].[Counterparty] ([CounterpartyId])
+
+alter table [dwh].[Deal] add foreign key([CurrencyCode])
+references [dwh].[DimCurrency] ([CurrencyCode])</code></pre>
+                </section>
+                <section>
+                    <h4>Добавим check constraint</h4>
+                    <pre class="fragment"><code class="sql">alter table dwh.deal
+add constraint CH_deal_value_maturyty_date
+check (ValueDate < MaturityDate or MaturityDate is null)</code></pre>
+                </section>
+            </section>
+            <section>
+                <section>
+                    <h2>Создадим загрузку сделок МБК</h2>
+                    <h4>&darr;</h4>
+                </section>
+                <section>
+                    <h4>Подготовим данные</h4>
+                    <p class="fragment">Создадим вью:</p>
+                    <pre class="fragment"><code class="sql">create view [mbk].[vMBKDeals] as
+
+select
+	d.BookValueDate
+  , d.SourceSystemId
+  , dss.SourceSystemName
+  , d.SourceSystemRecordNumber
+  , d.BusinessBlockId
+  , dbb.BusinessBlockCode
+  , dbb.BusinessBlockName
+  , d.CCY
+  , d.CurrentPrincipal
+  , d.CurrentNominalInterestRate
+  , d.DealDate
+  , d.ValueDate
+  , d.MaturityDate
+  , d.CounterpartyId
+  , dct.CounterpartyTypename
+  , c.Name CounterpartyName
+from mbk.MBKDeals d
+	left join dwh.DimSourceSystem dss
+		on dss.SourceSystemId = d.SourceSystemId
+	left join dwh.DimBusinessBlock dbb
+		on dbb.BusinessBlockId = d.BusinessBlockId
+	left join dwh.Counterparty c
+		on c.CounterpartyId = d.CounterpartyId
+	left join dwh.DimCounterpartyType dct
+		on dct.CounterpartyTypeId = c.CounterpartyTypeId</code></pre>
+                </section>
+                <section>
+                    <p>Или табличную функцию:</p>
+                    <pre class="fragment"><code class="sql">create function mbk.fnGetMbkDealsOnDate(@ReportDate date)
+returns table as return
+
+select
+	d.BookValueDate
+  , d.SourceSystemId
+  , dss.SourceSystemName
+  , d.SourceSystemRecordNumber
+  , case
+		when d.CurrentPrincipal >= 0 then 15 --'A_BANK_DEPO_T'
+		else 16 --'L_BANK_DEPO_T'
+	end as ProductID
+  , d.BusinessBlockId
+  , dbb.BusinessBlockCode
+  , dbb.BusinessBlockName
+  , d.CCY
+  , d.CurrentPrincipal
+  , d.CurrentNominalInterestRate
+  , d.DealDate
+  , d.ValueDate
+  , d.MaturityDate
+  , d.CounterpartyId
+  , dct.CounterpartyTypename
+  , c.Name CounterpartyName
+from mbk.MBKDeals d
+	left join dwh.DimSourceSystem dss
+		on dss.SourceSystemId = d.SourceSystemId
+
+	left join dwh.DimBusinessBlock dbb
+		on dbb.BusinessBlockId = d.BusinessBlockId
+
+	left join dwh.Counterparty c
+		on c.CounterpartyId = d.CounterpartyId
+	left join dwh.DimCounterpartyType dct
+		on dct.CounterpartyTypeId = c.CounterpartyTypeId
+
+where d.BookValueDate = @ReportDate
+                    </code></pre></section>
+                <section>
+                    <h4>Теперь нам нужна процедура</h4>
+                    <pre class="fragment"><code>create proc mbk.pLoadMbkOnDate @ReportDate date
+as
+begin
+	declare @SourceSystemID int = (	select SourceSystemId
+									from dwh.DimSourceSystem
+									where SourceSystemName = 'MBK')
+
+	begin transaction
+		begin try
+			if exists(select top 1 * from dwh.deal where BookValueDate = @ReportDate)
+			begin
+				print 'Данные за ' + convert(varchar, @ReportDate, 127) + ' уже были загружены в таблицу dwh.Deal. Загрузим их заново.'
+
+				delete from dwh.deal where BookValueDate = @ReportDate
+			end
+			print 'Начинаем загрузку данных за ' + convert(varchar, @ReportDate, 127) + '.'
+
+			insert into [dwh].[Deal]
+			   ([BookValueDate]
+			   ,[SourceSystemId]
+			   ,[SourceSystemRecordNumber]
+			   ,[ProductId]
+			   ,[BusinessBlockId]
+			   ,[CurrencyCode]
+			   ,[CurrentNominal]
+			   ,[CurrentNominalInterestRate]
+			   ,[DealDate]
+			   ,[ValueDate]
+			   ,[MaturityDate]
+			   ,[InterestFrequencyId]
+			   ,[HasWithdrawOptionFlag]
+			   ,[HasTopUpOptionFlag]
+			   ,[CounterpartyId])
+			select
+				@ReportDate as	BookValueDate
+			  , @SourceSystemID as SourceSystemId
+			  , SourceSystemRecordNumber
+			  , ProductID
+			  , BusinessBlockId
+			  , CCY as [CurrencyCode]
+			  , CurrentPrincipal
+			  , CurrentNominalInterestRate
+			  , DealDate
+			  , ValueDate
+			  , MaturityDate
+			  , null as [InterestFrequencyId]
+			  , null as [HasWithdrawOptionFlag]
+			  , null as [HasTopUpOptionFlag]
+			  , CounterpartyId
+			from mbk.fnGetMbkDealsOnDate(@ReportDate)
+
+			print 'Данные загрузились!'
+
+
+			commit
+		end try
+		begin catch
+
+			print 'Произошла ошибка!'
+			rollback;
+			throw
+		end catch
+
+
+end</code></pre>
+                </section>
+                <section>
+                    <h4>Запустим процедуру:</h4>
+                    <pre><code class="sql">exec mbk.pLoadMbkOnDate
+	@ReportDate = '2018-07-31'</code></pre>
+                </section>
+                <section>
+                    <p>Что можно улучшить в загрузке мбк?</p>
+                </section>
+            </section>
+
+
+            <section>
+                <h1>Конец!</h1>
+            </section>
+
+
+        </div>
+    </div>
+
+    <script src="lib/js/head.min.js"></script>
+    <script src="js/reveal.js"></script>
+
+    <script>
+        // More info about config & dependencies:
+        // - https://github.com/hakimel/reveal.js#configuration
+        // - https://github.com/hakimel/reveal.js#dependencies
+        Reveal.initialize({
+            dependencies: [
+                { src: 'plugin/markdown/marked.js' },
+                { src: 'plugin/markdown/markdown.js' },
+                { src: 'plugin/notes/notes.js', async: true },
+                { src: 'plugin/highlight/highlight.js', async: true, callback: function () { hljs.initHighlightingOnLoad(); } }
+            ]
+        });
+        Reveal.configure({ slideNumber: true });
+    </script>
+</body>
+
+</html>
