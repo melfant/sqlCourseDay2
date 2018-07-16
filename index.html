@@ -208,65 +208,65 @@ where d.BookValueDate = @ReportDate
                     <pre class="fragment"><code>create proc mbk.pLoadMbkOnDate @ReportDate date
 as
 begin
-	declare @SourceSystemID int = (	select SourceSystemId
-									from dwh.DimSourceSystem
-									where SourceSystemName = 'MBK')
+declare @SourceSystemID int = (	select SourceSystemId
+							from dwh.DimSourceSystem
+							where SourceSystemName = 'MBK')
 
-		begin try
-            begin transaction
-			if exists(select top 1 * from dwh.deal where BookValueDate = @ReportDate)
-			begin
-				print 'Данные за ' + convert(varchar, @ReportDate, 127) + ' уже были загружены в таблицу dwh.Deal. Загрузим их заново.'
+begin try
+    begin transaction
+    if exists(select top 1 * from dwh.deal where BookValueDate = @ReportDate)
+    begin
+    	print 'Данные за ' + convert(varchar, @ReportDate, 127) + ' уже были загружены в таблицу dwh.Deal. Загрузим их заново.'
 
-				delete from dwh.deal where BookValueDate = @ReportDate
-			end
-			print 'Начинаем загрузку данных за ' + convert(varchar, @ReportDate, 127) + '.'
+    	delete from dwh.deal where BookValueDate = @ReportDate
+    end
+    print 'Начинаем загрузку данных за ' + convert(varchar, @ReportDate, 127) + '.'
 
-			insert into [dwh].[Deal]
-			   ([BookValueDate]
-			   ,[SourceSystemId]
-			   ,[SourceSystemRecordNumber]
-			   ,[ProductId]
-			   ,[BusinessBlockId]
-			   ,[CurrencyCode]
-			   ,[CurrentNominal]
-			   ,[CurrentNominalInterestRate]
-			   ,[DealDate]
-			   ,[ValueDate]
-			   ,[MaturityDate]
-			   ,[InterestFrequencyId]
-			   ,[HasWithdrawOptionFlag]
-			   ,[HasTopUpOptionFlag]
-			   ,[CounterpartyId])
-			select
-				@ReportDate as	BookValueDate
-			  , @SourceSystemID as SourceSystemId
-			  , SourceSystemRecordNumber
-			  , ProductID
-			  , BusinessBlockId
-			  , CCY as [CurrencyCode]
-			  , CurrentPrincipal
-			  , CurrentNominalInterestRate
-			  , DealDate
-			  , ValueDate
-			  , MaturityDate
-			  , null as [InterestFrequencyId]
-			  , null as [HasWithdrawOptionFlag]
-			  , null as [HasTopUpOptionFlag]
-			  , CounterpartyId
-			from mbk.fnGetMbkDealsOnDate(@ReportDate)
+    insert into [dwh].[Deal]
+       ([BookValueDate]
+       ,[SourceSystemId]
+       ,[SourceSystemRecordNumber]
+       ,[ProductId]
+       ,[BusinessBlockId]
+       ,[CurrencyCode]
+       ,[CurrentNominal]
+       ,[CurrentNominalInterestRate]
+       ,[DealDate]
+       ,[ValueDate]
+       ,[MaturityDate]
+       ,[InterestFrequencyId]
+       ,[HasWithdrawOptionFlag]
+       ,[HasTopUpOptionFlag]
+       ,[CounterpartyId])
+    select
+    	@ReportDate as	BookValueDate
+      , @SourceSystemID as SourceSystemId
+      , SourceSystemRecordNumber
+      , ProductID
+      , BusinessBlockId
+      , CCY as [CurrencyCode]
+      , CurrentPrincipal
+      , CurrentNominalInterestRate
+      , DealDate
+      , ValueDate
+      , MaturityDate
+      , null as [InterestFrequencyId]
+      , null as [HasWithdrawOptionFlag]
+      , null as [HasTopUpOptionFlag]
+      , CounterpartyId
+    from mbk.fnGetMbkDealsOnDate(@ReportDate)
 
-			print 'Данные загрузились!'
+    print 'Данные загрузились!'
 
 
-			commit
-		end try
-		begin catch
+    commit
+end try
+begin catch
 
-			print 'Произошла ошибка!'
-			rollback;
-			throw
-		end catch
+    print 'Произошла ошибка!'
+    rollback;
+    throw
+end catch
 
 
 end</code></pre>
