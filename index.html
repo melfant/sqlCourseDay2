@@ -81,51 +81,118 @@
                 </section>
                 <section>
                     <h4>Например, таблицу</h4>
-                    <pre class="fragment"><code class="sql">create table [dwh].[Deal](
-	[BookValueDate] [date] not null,
-	[SourceSystemId] [smallint] not null,
-	[SourceSystemRecordNumber] [varchar](100) not null,
-	[ProductId] [smallint] null,
-	[BusinessBlockId] [smallint] null,
-	[CurrencyCode] [char](3) null,
-	[CurrentNominal] [decimal](23, 5) null,
-	[CurrentNominalInterestRate] [decimal](7, 6) null,
-	[DealDate] [date] null,
-	[ValueDate] [date] null,
-	[MaturityDate] [date] null,
-	[InterestFrequencyId] [smallint] null,
-	[HasWithdrawOptionFlag] [bit] null,
-	[HasTopUpOptionFlag] [bit] null,
-	[CounterpartyId] [int] null
+                    <pre class="fragment"><code class="sql">create table dwh.tbl
+(
+  Date date not null,
+  Name varchar(2),
+  isGood bit,
+  Discount int
 )</code></pre>
+                </section>
+                <section>
+                    <h4>Дефолтные значения</h4>
+                    <pre class="fragment"><code class="sql">create table dwh.tbl
+(
+  Date date not null,
+  Name varchar(2),
+  isGood bit default 1,
+  Discount int
+)</code></pre>
+                    <pre class="fragment"><code class="sql">alter table dwh.tbl
+add constraint DF_tbl_isGood default 1 for isGood</code></pre>
+                </section>
+                <section>
+                    <h4>попробуем записать данные</h4>
+                    <pre><code class="sql">insert into dwh.tbl
+(
+  Date,
+  Name,
+  Discount
+)
+select
+  cast(CURRENT_TIMESTAMP as date),
+  'Dima',
+  5</code></pre>
+                    <pre class="fragment"><code class="sql">Msg 8152, Level 16, State 14, Line 14
+String or binary data would be truncated.
+The statement has been terminated.</code></pre>
+                    <pre class="fragment"><code class="sql">alter table dwh.tbl alter column Name varchar(5)</code></pre>
                 </section>
                 <section>
                     <h4>Добавим первичный ключ</h4>
-                    <pre class="fragment"><code class="sql">alter table [dwh].[Deal] add primary key clustered
+                    <pre class="fragment"><code class="sql">alter table dwh.tbl add primary key clustered
 (
-	[BookValueDate],
-	[SourceSystemId],
-	[SourceSystemRecordNumber]
+  Date,
+  Name
 )</code></pre>
+                    <pre class="fragment"><code class="sql">Msg 8111, Level 16, State 1, Line 13
+Cannot define PRIMARY KEY constraint on nullable column in table 'tbl'.
+Msg 1750, Level 16, State 0, Line 13
+Could not create constraint or index. See previous errors.
+</code></pre>
+                    <pre class="fragment"><code class="sql">alter table dwh.tbl alter column Date date not null
+alter table dwh.tbl alter column Name varchar(5) not null</code></pre>
                 </section>
                 <section>
                     <h4>Добавим внешние ключи</h4>
-                    <pre class="fragment"><code class="sql">alter table [dwh].[Deal] add foreign key([BusinessBlockId])
-references [dwh].[DimBusinessBlock] ([BusinessBlockId])
-
-alter table [dwh].[Deal] add foreign key([CounterpartyId])
-references [dwh].[Counterparty] ([CounterpartyId])
-
-alter table [dwh].[Deal] add foreign key([CurrencyCode])
-references [dwh].[DimCurrency] ([CurrencyCode])</code></pre>
+                    <pre class="fragment"><code class="sql">alter table dwh.tbl add CCY char(3) foreign key
+references dwh.DimCurrency(currencyCode)</code></pre>
+                    <pre class="fragment"><code class="sql">alter table dwh.tbl add foreign key(CCY)
+references dwh.DimCurrency(currencyCode)</code></pre>
                 </section>
                 <section>
                     <h4>Добавим check constraint</h4>
-                    <pre class="fragment"><code class="sql">alter table dwh.deal
-add constraint CH_deal_value_maturyty_date
-check (ValueDate < MaturityDate or MaturityDate is null)</code></pre>
+                    <pre class="fragment"><code class="sql">alter table dwh.tbl
+add constraint CH_date
+check (Date between '2000-01-01' and '2099-01-01')</code></pre>
                 </section>
             </section>
+            <section>
+                <section>
+                    <h2>Обработка ошибок</h2>
+                    <h4>&darr;</h4>
+                </section>
+                <section>
+                    <pre><code class="sql">create table #tbl
+(
+  a int
+)</code></pre>
+                    <pre class="fragment"><code class="sql">begin try
+
+  insert into #tbl
+  select 'a'
+
+end try
+begin catch
+	print 'Произошла ошибка!'
+  ;throw
+end catch</code></pre>
+                    <pre class="fragment"><code class="sql">(0 rows affected)
+Произошла ошибка!
+Msg 245, Level 16, State 1, Line 58
+Conversion failed when converting the varchar value 'a' to data type int.
+</code></pre>
+                </section>
+                <section>
+                    <h4>Транзакции</h4>
+                    <pre class="fragment"><code class="sql">begin try
+  begin transaction
+
+  insert into #tbl select 1
+  insert into #tbl select 'a'
+
+  commit
+  print 'transaction completed'
+end try
+begin catch
+  print 'transaction failed!'
+  rollback;
+  throw
+end catch</code></pre>
+                </section>
+
+            </section>
+
             <section>
                 <section>
                     <h2>Создадим загрузку сделок МБК</h2>
@@ -293,23 +360,23 @@ end</code></pre>
                 </section>
                 <section>
                     <h4>Постановка задачи:</h4>
-                    <p>Создать регулярную загрузку данных из источника по пассивам юр. лиц (схема CORPORATE_LIABILITIES)</p>
+                    <p>Создать регулярную загрузку данных из источника по пассивам юр. лиц (из excel файлов)</p>
                 </section>
                 <section>
                     <h4>Шаг 1.</h4>
-                    <p>Придумайте и создайте в своей схеме таблицу, в которой будут храниться данные по счетам и депозитам юр. лиц.</p>
+                    <p>Загрузите данные из excel файлов в "сырые" таблицы (userXX.CA и userXX.Deposits).</p>
                 </section>
                 <section>
                     <h4>Шаг 2.</h4>
-                    <p>Подумайте над трансформацией данных из источника в Вашу таблицу. Создайте представление или табличную функцию.</p>
+                    <p>Придумайте и создайте в своей схеме таблицу, в которой будут храниться данные по счетам и депозитам юр. лиц.</p>
                 </section>
                 <section>
                     <h4>Шаг 3.</h4>
-                    <p>Создайте процедуру, которая будет загружать сделки, действующие на отчетню дату.</p>
+                    <p>Подумайте над трансформацией данных из "сырых" таблиц в Вашу таблицу. Создайте представление или табличную функцию.</p>
                 </section>
                 <section>
                     <h4>Шаг 4.</h4>
-                    <p>Создайте джоб для регулярной загрузки</p>
+                    <p>Создайте процедуру, которая будет загружать сделки, действующие на отчетню дату.</p>
                 </section>
                 <section>
                     <h4>Шаг 5.</h4>
@@ -334,7 +401,11 @@ end</code></pre>
                     <p>Добавьте в загрузку проверку, появились ли новые контрагенты. Сделайте вывод соответствующего сообщения или автоматическое обновление справочника контрагентов.</p>
                 </section>
                 <section>
-                    <h4>Шаг 8.*</h4>
+                    <h4>Шаг 8*.</h4>
+                    <p>Создайте джоб для регулярной загрузки</p>
+                </section>
+                <section>
+                    <h4>Шаг 9.*</h4>
                     <p>Подумайте над логгированием загрузки. Попробуйте реализовать его в Вашей схеме.</p>
                 </section>
             </section>
